@@ -21,10 +21,70 @@
             padding: 0;
             margin: 0;
         }
+        .map-title {
+            position: absolute;
+            top: 14px;
+            left: 60px;
+            z-index: 1100;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            color: #1f2937;
+            backdrop-filter: blur(6px);
+        }
+        .measure-export.leaflet-bar a {
+            display: block;
+            width: auto;
+            height: auto;
+            padding: 6px 10px;
+            line-height: 1.2;
+            font-size: 12px;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            color: #1f2937;
+            background: #ffffff;
+            text-decoration: none;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .measure-export.leaflet-bar a:last-child {
+            border-bottom: 0;
+        }
+        .measure-export.leaflet-bar a:hover {
+            background: #f3f4f6;
+        }
+        .user-target-info {
+            background: rgba(255, 255, 255, 0.92);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            color: #111827;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .user-target-info.hidden {
+            display: none;
+        }
+        .user-direction-arrow-container {
+            background: transparent;
+        }
+        .user-direction-arrow {
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 12px solid rgba(37, 99, 235, 0.8);
+            transform-origin: 50% 50%;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+        }
         </style>
         <title></title>
     </head>
     <body>
+        <div class="map-title">Praslin Survey Control Stations</div>
         <div id="map">
         </div>
         <script src="js/qgis2web_expressions.js"></script>
@@ -59,11 +119,28 @@
               });
             }
         }
+        var isLowEnd = L.Browser.mobile;
+        try {
+            var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn && (conn.saveData || (conn.effectiveType && conn.effectiveType.indexOf('2g') !== -1))) {
+                isLowEnd = true;
+            }
+        } catch (e) {}
         var map = L.map('map', {
-            zoomControl:false, maxZoom:28, minZoom:1
+            zoomControl:false,
+            maxZoom:28,
+            minZoom:1,
+            zoomAnimation: !isLowEnd,
+            fadeAnimation: !isLowEnd,
+            markerZoomAnimation: !isLowEnd,
+            inertia: !isLowEnd
         }).fitBounds([[-4.38805080869619,55.62138146166838],[-4.24912115121567,55.853723097754916]]);
+        var maxBounds = L.latLngBounds([[-4.38805080869619,55.62138146166838],[-4.24912115121567,55.853723097754916]]);
+        map.setMaxBounds(maxBounds);
+        map.options.maxBoundsViscosity = 1.0;
+        map.setMinZoom(map.getZoom());
         var hash = new L.Hash(map);
-        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        map.attributionControl.setPrefix('@geda &middot; <a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
         // remove popup's row if "visible-with-data"
         function removeEmptyRowsFromPopupContent(content, feature) {
@@ -129,7 +206,7 @@
         var zoomControl = L.control.zoom({
             position: 'topleft'
         }).addTo(map);
-        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        L.control.locate({locateOptions: {maxZoom: 19, enableHighAccuracy: !isLowEnd}}).addTo(map);
         var measureControl = new L.Control.Measure({
             position: 'topleft',
             primaryLengthUnit: 'meters',
@@ -152,10 +229,31 @@
             minZoom: 1,
             maxZoom: 28,
             minNativeZoom: 0,
-            maxNativeZoom: 19
+            maxNativeZoom: 19,
+            updateWhenIdle: isLowEnd,
+            updateWhenZooming: !isLowEnd,
+            keepBuffer: isLowEnd ? 1 : 2,
+            reuseTiles: true,
+            detectRetina: false
         });
         layer_OSMStandard_0;
         map.addLayer(layer_OSMStandard_0);
+        map.createPane('pane_GoogleSatellite_0');
+        map.getPane('pane_GoogleSatellite_0').style.zIndex = 400;
+        var layer_GoogleSatellite_0 = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            pane: 'pane_GoogleSatellite_0',
+            opacity: 1.0,
+            attribution: 'Google',
+            minZoom: 1,
+            maxZoom: 20,
+            maxNativeZoom: 19,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            updateWhenIdle: isLowEnd,
+            updateWhenZooming: !isLowEnd,
+            keepBuffer: isLowEnd ? 1 : 2,
+            reuseTiles: true,
+            detectRetina: false
+        });
         function pop_Copyofcontrolswithdescriptionpraslin_1(feature, layer) {
             layer.on({
                 mouseout: function(e) {
@@ -241,12 +339,132 @@
         bounds_group.addLayer(layer_Copyofcontrolswithdescriptionpraslin_1);
         map.addLayer(layer_Copyofcontrolswithdescriptionpraslin_1);
         setBounds();
+        if (L.ShapeMarker && !L.ShapeMarker.prototype.getBounds) {
+            L.ShapeMarker.prototype.getBounds = function() {
+                var latlng = this.getLatLng();
+                return L.latLngBounds(latlng, latlng);
+            };
+        }
+        var selectedFeatureLayer = null;
+        var selectedFeatureLatLng = null;
+        var selectedFeatureName = null;
+        var userLatLng = null;
+        var userDirectionLine = null;
+        var userDirectionArrow = null;
+        var userTargetInfoControl = L.control({ position: 'bottomleft' });
+        userTargetInfoControl.onAdd = function() {
+            var container = L.DomUtil.create('div', 'user-target-info hidden');
+            container.textContent = 'Select a feature to see distance and bearing.';
+            L.DomEvent.disableClickPropagation(container);
+            return container;
+        };
+        userTargetInfoControl.addTo(map);
+        var userTargetInfoEl = userTargetInfoControl.getContainer();
+
+        function getLayerLatLng(layer) {
+            if (!layer) return null;
+            if (layer.getLatLng) return layer.getLatLng();
+            if (layer.getBounds) return layer.getBounds().getCenter();
+            return null;
+        }
+
+        function getBearing(from, to) {
+            var toRad = Math.PI / 180;
+            var lat1 = from.lat * toRad;
+            var lat2 = to.lat * toRad;
+            var dLon = (to.lng - from.lng) * toRad;
+            var y = Math.sin(dLon) * Math.cos(lat2);
+            var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            var brng = Math.atan2(y, x) * 180 / Math.PI;
+            return (brng + 360) % 360;
+        }
+
+        function formatDistance(meters) {
+            if (meters >= 1000) {
+                return (meters / 1000).toFixed(2) + ' km';
+            }
+            return Math.round(meters) + ' m';
+        }
+
+        function getArrowLatLng(origin, bearingDeg) {
+            var point = map.latLngToContainerPoint(origin);
+            var rad = bearingDeg * Math.PI / 180;
+            var offset = isLowEnd ? 28 : 36;
+            var targetPoint = L.point(
+                point.x + offset * Math.sin(rad),
+                point.y - offset * Math.cos(rad)
+            );
+            return map.containerPointToLatLng(targetPoint);
+        }
+
+        function updateUserTarget() {
+            if (!userLatLng || !selectedFeatureLatLng) {
+                if (userTargetInfoEl) {
+                    userTargetInfoEl.classList.add('hidden');
+                }
+                if (userDirectionLine) {
+                    map.removeLayer(userDirectionLine);
+                    userDirectionLine = null;
+                }
+                if (userDirectionArrow) {
+                    map.removeLayer(userDirectionArrow);
+                    userDirectionArrow = null;
+                }
+                return;
+            }
+            var distance = map.distance(userLatLng, selectedFeatureLatLng);
+            var bearing = getBearing(userLatLng, selectedFeatureLatLng);
+            if (userTargetInfoEl) {
+                userTargetInfoEl.classList.remove('hidden');
+                userTargetInfoEl.textContent = (selectedFeatureName ? selectedFeatureName + ': ' : '') +
+                    formatDistance(distance) + ' | ' + Math.round(bearing) + ' deg';
+            }
+            var arrowLatLng = getArrowLatLng(userLatLng, bearing);
+            if (!userDirectionLine) {
+                userDirectionLine = L.polyline([userLatLng, arrowLatLng], {
+                    color: '#2563eb',
+                    weight: 2,
+                    opacity: 0.6,
+                    dashArray: '4,6',
+                    interactive: false
+                }).addTo(map);
+            } else {
+                userDirectionLine.setLatLngs([userLatLng, arrowLatLng]);
+            }
+            var arrowHtml = '<div class="user-direction-arrow" style="transform: rotate(' + bearing + 'deg);"></div>';
+            var arrowIcon = L.divIcon({
+                className: 'user-direction-arrow-container',
+                html: arrowHtml,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            if (!userDirectionArrow) {
+                userDirectionArrow = L.marker(arrowLatLng, {
+                    icon: arrowIcon,
+                    interactive: false,
+                    keyboard: false
+                }).addTo(map);
+            } else {
+                userDirectionArrow.setLatLng(arrowLatLng);
+                userDirectionArrow.setIcon(arrowIcon);
+            }
+        }
+
+        function setSelectedFeature(layer) {
+            selectedFeatureLayer = layer || null;
+            selectedFeatureLatLng = getLayerLatLng(layer);
+            selectedFeatureName = layer && layer.feature && layer.feature.properties ? layer.feature.properties['STATION'] : null;
+            updateUserTarget();
+        }
         var i = 0;
         layer_Copyofcontrolswithdescriptionpraslin_1.eachLayer(function(layer) {
             var context = {
                 feature: layer.feature,
                 variables: {}
             };
+            layer.on('click', function() {
+                setSelectedFeature(layer);
+            });
             layer.bindTooltip((layer.feature.properties['STATION'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Arial\', sans-serif;">' + layer.feature.properties['STATION']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Copyofcontrolswithdescriptionpraslin_1'});
             labels.push(layer);
             totalMarkers += 1;
@@ -254,16 +472,55 @@
               addLabel(layer, i);
               i++;
         });
-        map.addControl(new L.Control.Search({
+        var featureSearchControl = new L.Control.Search({
             layer: layer_Copyofcontrolswithdescriptionpraslin_1,
             initial: false,
             hideMarkerOnCollapse: true,
-            propertyName: 'STATION'}));
+            collapsed: true,
+            textPlaceholder: 'Search features...',
+            minLength: 1,
+            autoType: true,
+            autoCollapse: true,
+            autoCollapseTime: 1200,
+            propertyName: 'STATION',
+            moveToLocation: function(latlng, title, map) {
+                if (latlng && latlng.layer) {
+                    if (latlng.layer.getBounds) {
+                        map.fitBounds(latlng.layer.getBounds(), { maxZoom: 18 });
+                        return;
+                    }
+                    if (latlng.layer.getLatLng) {
+                        map.setView(latlng.layer.getLatLng(), 18);
+                        return;
+                    }
+                }
+                map.setView(latlng, 18);
+            }
+        });
+        map.addControl(featureSearchControl);
+        featureSearchControl.on('search:locationfound', function(e) {
+            if (e && e.layer) {
+                setSelectedFeature(e.layer);
+            }
+        });
         if (typeof url === 'undefined') {
-            document.getElementsByClassName('search-button')[0].className += ' fa fa-binoculars';
+            document.getElementsByClassName('search-button')[0].className += ' fas fa-search';
         } else {
-            document.getElementsByClassName('search-button')[1].className += ' fa fa-binoculars';
+            document.getElementsByClassName('search-button')[1].className += ' fas fa-search';
         }
+        map.on('locationfound', function(e) {
+            userLatLng = e.latlng;
+            updateUserTarget();
+        });
+        map.on('locationerror', function() {
+            userLatLng = null;
+            updateUserTarget();
+        });
+        map.on('zoomend moveend', function() {
+            if (userLatLng && selectedFeatureLatLng) {
+                updateUserTarget();
+            }
+        });
         resetLabels([layer_Copyofcontrolswithdescriptionpraslin_1]);
         map.on("zoomend", function(){
             resetLabels([layer_Copyofcontrolswithdescriptionpraslin_1]);
@@ -273,6 +530,179 @@
         });
         map.on("layerremove", function(){
             resetLabels([layer_Copyofcontrolswithdescriptionpraslin_1]);
+        });
+
+        var baseMaps = {
+            "OpenStreetMap": layer_OSMStandard_0,
+            "Google Satellite": layer_GoogleSatellite_0
+        };
+        var overlayMaps = {
+            "Survey Control Stations": layer_Copyofcontrolswithdescriptionpraslin_1
+        };
+        L.control.layers(baseMaps, overlayMaps, { collapsed: true }).addTo(map);
+
+        var lastMeasureLatLngs = null;
+        map.on('measurefinish', function(e) {
+            if (e && e.points && e.points.length) {
+                lastMeasureLatLngs = e.points.slice();
+            } else {
+                lastMeasureLatLngs = null;
+            }
+        });
+
+        var WGS_TO_LOCAL_EASTING = 62.367;
+        var WGS_TO_LOCAL_NORTHING = 271.892;
+
+        function getClosedLatLngs(latlngs) {
+            var ring = latlngs.slice();
+            if (ring.length) {
+                var first = ring[0];
+                var last = ring[ring.length - 1];
+                if (first.lat !== last.lat || first.lng !== last.lng) {
+                    ring.push(first);
+                }
+            }
+            return ring;
+        }
+
+        function formatCoordStrings(latlngs) {
+            var ring = getClosedLatLngs(latlngs);
+            var wgsPairs = [];
+            var localPairs = [];
+            for (var i = 0; i < ring.length; i++) {
+                var wgsE = ring[i].lng;
+                var wgsN = ring[i].lat;
+                var localE = wgsE + WGS_TO_LOCAL_EASTING;
+                var localN = wgsN + WGS_TO_LOCAL_NORTHING;
+                wgsPairs.push(wgsE.toFixed(6) + "," + wgsN.toFixed(6));
+                localPairs.push(localE.toFixed(6) + "," + localN.toFixed(6));
+            }
+            return {
+                wgs: wgsPairs.join(" ; "),
+                local: localPairs.join(" ; ")
+            };
+        }
+
+        function buildPolygonGeoJSON(latlngs) {
+            var ringLatLngs = getClosedLatLngs(latlngs);
+            var ring = ringLatLngs.map(function(ll) {
+                return [ll.lng, ll.lat];
+            });
+            var coords = formatCoordStrings(latlngs);
+            return {
+                type: "FeatureCollection",
+                features: [{
+                    type: "Feature",
+                    properties: {
+                        name: "Measured Area",
+                        wgs_coord: coords.wgs,
+                        local_coord: coords.local
+                    },
+                    geometry: {
+                        type: "Polygon",
+                        coordinates: [ring]
+                    }
+                }]
+            };
+        }
+
+        function downloadText(filename, text, mime) {
+            var blob = new Blob([text], { type: mime || 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(function() {
+                URL.revokeObjectURL(url);
+                link.remove();
+            }, 0);
+        }
+
+        function loadShpWrite(callback) {
+            if (typeof shpwrite !== 'undefined') {
+                callback();
+                return;
+            }
+            if (loadShpWrite.loading) {
+                loadShpWrite.queue.push(callback);
+                return;
+            }
+            loadShpWrite.loading = true;
+            loadShpWrite.queue = [callback];
+            var script = document.createElement('script');
+            script.src = 'https://unpkg.com/shp-write@latest/shpwrite.js';
+            script.onload = function() {
+                loadShpWrite.loading = false;
+                var queue = loadShpWrite.queue || [];
+                loadShpWrite.queue = [];
+                queue.forEach(function(cb) { cb(); });
+            };
+            script.onerror = function() {
+                loadShpWrite.loading = false;
+                alert('Failed to load Shapefile exporter.');
+            };
+            document.head.appendChild(script);
+        }
+
+        var exportControl = L.control({ position: 'topright' });
+        exportControl.onAdd = function() {
+            var container = L.DomUtil.create('div', 'leaflet-bar measure-export');
+            container.innerHTML = ''
+                + '<a href="#" class="export-geojson" title="Export area as GeoJSON">GeoJSON</a>'
+                + '<a href="#" class="export-csv" title="Export area as CSV">CSV</a>'
+                + '<a href="#" class="export-shp" title="Export area as Shapefile">SHP</a>';
+            L.DomEvent.disableClickPropagation(container);
+            return container;
+        };
+        exportControl.addTo(map);
+
+        function ensurePolygonLatLngs() {
+            if (!lastMeasureLatLngs || lastMeasureLatLngs.length < 3) {
+                alert('Create an area measurement first (3+ points).');
+                return null;
+            }
+            return lastMeasureLatLngs;
+        }
+
+        document.querySelector('.export-geojson').addEventListener('click', function(e) {
+            e.preventDefault();
+            var latlngs = ensurePolygonLatLngs();
+            if (!latlngs) return;
+            var geojson = buildPolygonGeoJSON(latlngs);
+            downloadText('measured-area.geojson', JSON.stringify(geojson, null, 2), 'application/geo+json');
+        });
+
+        function csvEscape(value) {
+            var str = String(value);
+            if (str.indexOf('"') !== -1) {
+                str = str.replace(/"/g, '""');
+            }
+            if (str.indexOf(',') !== -1 || str.indexOf(';') !== -1 || str.indexOf('\n') !== -1 || str.indexOf('"') !== -1) {
+                str = '"' + str + '"';
+            }
+            return str;
+        }
+
+        document.querySelector('.export-csv').addEventListener('click', function(e) {
+            e.preventDefault();
+            var latlngs = ensurePolygonLatLngs();
+            if (!latlngs) return;
+            var coords = formatCoordStrings(latlngs);
+            var lines = ['id,wgs_coord,local_coord'];
+            lines.push('1,' + csvEscape(coords.wgs) + ',' + csvEscape(coords.local));
+            downloadText('measured-area.csv', lines.join('\n'), 'text/csv;charset=utf-8');
+        });
+
+        document.querySelector('.export-shp').addEventListener('click', function(e) {
+            e.preventDefault();
+            var latlngs = ensurePolygonLatLngs();
+            if (!latlngs) return;
+            loadShpWrite(function() {
+                var geojson = buildPolygonGeoJSON(latlngs);
+                shpwrite.download(geojson);
+            });
         });
         </script>        
     </body>

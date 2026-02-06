@@ -7081,6 +7081,9 @@ L.Control.Measure = L.Control.extend({
     activeColor: '#ABE67E',     // base color for map features while actively measuring
     completedColor: '#C8F2BE',  // base color for permenant features generated from completed measure
     captureZIndex: 10000,       // z-index of the marker used to capture measure events
+    snapToFirst: true,          // snap to first vertex to close polygons
+    snapDistance: 12,           // snap distance in screen pixels
+    snapFinish: true,           // clicking a snap point finishes the measurement
     popupOptions: {             // standard leaflet popup options http://leafletjs.com/reference.html#popup-options
       className: 'leaflet-measure-resultpopup',
       autoPanPadding: [10, 10]
@@ -7192,6 +7195,7 @@ L.Control.Measure = L.Control.extend({
   // get state vars and interface ready for measure
   _startMeasure: function () {
     this._locked = true;
+    this._snapLatLng = null;
     this._measureVertexes = L.featureGroup().addTo(this._layer);
     this._captureMarker = L.marker(this._map.getCenter(), {
       clickable: true,
@@ -7254,6 +7258,7 @@ L.Control.Measure = L.Control.extend({
   _clearMeasure: function () {
     this._latlngs = [];
     this._resultsModel = null;
+    this._snapLatLng = null;
     this._measureVertexes.clearLayers();
     if (this._measureDrag) {
       this._layer.removeLayer(this._measureDrag);
@@ -7283,6 +7288,18 @@ L.Control.Measure = L.Control.extend({
       iconSize: mapSize.multiplyBy(2),
       iconAnchor: mapSize, // center the 2x-sized icon on the marker latlng (map center)
     }));
+  },
+  _getSnappedLatLng: function (latlng) {
+    if (!this.options.snapToFirst || this._latlngs.length < 3) {
+      return null;
+    }
+    var first = this._latlngs[0];
+    var currentPoint = this._map.latLngToContainerPoint(latlng);
+    var firstPoint = this._map.latLngToContainerPoint(first);
+    if (currentPoint.distanceTo(firstPoint) <= this.options.snapDistance) {
+      return first;
+    }
+    return null;
   },
   // format measurements to nice display string based on units in options
   // `{ lengthDisplay: '100 Feet (0.02 Miles)', areaDisplay: ... }`
@@ -7328,10 +7345,18 @@ L.Control.Measure = L.Control.extend({
   // mouse move handler while measure in progress
   // adds floating measure marker under cursor
   _handleMeasureMove: function (evt) {
-    if (!this._measureDrag) {
-      this._measureDrag = L.circleMarker(evt.latlng, this._symbols.getSymbol('measureDrag')).addTo(this._layer);
+    var latlng = evt.latlng;
+    var snapped = this._getSnappedLatLng(latlng);
+    if (snapped) {
+      latlng = snapped;
+      this._snapLatLng = snapped;
     } else {
-      this._measureDrag.setLatLng(evt.latlng);
+      this._snapLatLng = null;
+    }
+    if (!this._measureDrag) {
+      this._measureDrag = L.circleMarker(latlng, this._symbols.getSymbol('measureDrag')).addTo(this._layer);
+    } else {
+      this._measureDrag.setLatLng(latlng);
     }
     this._measureDrag.bringToFront();
   },
@@ -7416,6 +7441,18 @@ L.Control.Measure = L.Control.extend({
     var latlng = this._map.mouseEventToLatLng(evt.originalEvent), // get actual latlng instead of the marker's latlng from originalEvent
       lastClick = _.last(this._latlngs),
       vertexSymbol = this._symbols.getSymbol('measureVertex');
+
+    var snapped = this._getSnappedLatLng(latlng);
+    if (snapped) {
+      this._snapLatLng = snapped;
+      if (this.options.snapFinish !== false) {
+        this._handleMeasureDoubleClick();
+        return;
+      }
+      latlng = snapped;
+    } else {
+      this._snapLatLng = null;
+    }
 
     if (!lastClick || !latlng.equals(lastClick)) { // skip if same point as last click, happens on `dblclick`
       this._latlngs.push(latlng);
