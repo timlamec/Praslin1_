@@ -93,7 +93,7 @@
             background: #1a73e8;
         }
         .user-target-btn.stop {
-            background: #6b7280;
+            background: #dc2626;
         }
         .user-target-btn.hidden {
             display: none;
@@ -113,35 +113,32 @@
         .user-direction-arrow-container {
             background: transparent;
         }
-        .gmaps-arrow {
+        .nav-arrow {
             position: relative;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #1a73e8;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+            width: 16px;
+            height: 16px;
             transform-origin: 50% 50%;
         }
-        .gmaps-arrow-tip {
+        .nav-arrow-head {
             position: absolute;
             left: 50%;
-            top: -6px;
+            top: 0;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 6px solid transparent;
-            border-right: 6px solid transparent;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
             border-bottom: 8px solid #1a73e8;
         }
-        .gmaps-arrow-core {
+        .nav-arrow-stem {
             position: absolute;
             left: 50%;
-            top: 4px;
+            top: 7px;
             transform: translateX(-50%);
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #eaf2fe;
+            width: 2px;
+            height: 8px;
+            background: #1a73e8;
+            border-radius: 1px;
         }
         </style>
         <title></title>
@@ -270,7 +267,11 @@
         var zoomControl = L.control.zoom({
             position: 'topleft'
         }).addTo(map);
-        var locateControl = L.control.locate({locateOptions: {maxZoom: 19, enableHighAccuracy: !isLowEnd}}).addTo(map);
+        var locateControl = L.control.locate({
+            locateOptions: {maxZoom: 19, enableHighAccuracy: !isLowEnd},
+            circleStyle: {interactive: false},
+            markerStyle: {interactive: false}
+        }).addTo(map);
         var measureControl = new L.Control.Measure({
             position: 'topleft',
             primaryLengthUnit: 'meters',
@@ -539,7 +540,7 @@
                 userTargetInfoEl.classList.remove('hidden');
                 var text = (selectedFeatureName ? selectedFeatureName + ': ' : '') +
                     formatDistance(distance) + ' | ' + Math.round(bearingToFeature) + ' deg';
-                if (userAccuracy != null) {
+                if (userAccuracy != null && L.Browser.mobile) {
                     text += ' | acc ±' + Math.round(userAccuracy) + ' m';
                 }
                 var textEl = userTargetInfoEl.querySelector('.user-target-text');
@@ -576,15 +577,15 @@
             } else {
                 userDirectionLine.setLatLngs([userLatLng, selectedFeatureLatLng]);
             }
-            var arrowHtml = '<div class="gmaps-arrow" style="transform: rotate(' + bearingToFeature + 'deg);">' +
-                '<div class="gmaps-arrow-tip"></div>' +
-                '<div class="gmaps-arrow-core"></div>' +
+            var arrowHtml = '<div class="nav-arrow" style="transform: rotate(' + bearingToFeature + 'deg);">' +
+                '<div class="nav-arrow-head"></div>' +
+                '<div class="nav-arrow-stem"></div>' +
                 '</div>';
             var arrowIcon = L.divIcon({
                 className: 'user-direction-arrow-container',
                 html: arrowHtml,
-                iconSize: [18, 18],
-                iconAnchor: [9, 9]
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
             });
             if (!userDirectionArrow) {
                 userDirectionArrow = L.marker(arrowLatLng, {
