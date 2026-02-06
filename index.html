@@ -70,13 +70,45 @@
         }
         .user-target-info .release-link {
             display: inline-block;
-            margin-top: 4px;
+            margin-top: 6px;
             font-size: 11px;
             color: #2563eb;
             text-decoration: none;
         }
         .user-target-info .release-link:hover {
             text-decoration: underline;
+        }
+        .user-target-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .user-target-btn {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            text-decoration: none;
+            color: #ffffff;
+            background: #1a73e8;
+        }
+        .user-target-btn.stop {
+            background: #6b7280;
+        }
+        .user-target-btn.hidden {
+            display: none;
+        }
+        .location-notice {
+            background: rgba(255, 255, 255, 0.92);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            color: #111827;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .location-notice.hidden {
+            display: none;
         }
         .user-direction-arrow-container {
             background: transparent;
@@ -170,6 +202,7 @@
         map.setMaxBounds(maxBounds);
         map.options.maxBoundsViscosity = 1.0;
         map.setMinZoom(map.getZoom());
+        var featureRadius = (L.Browser.mobile || isLowEnd) ? 8 : 5.6;
         var hash = new L.Hash(map);
         map.attributionControl.setPrefix('@geda &middot; <a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
@@ -237,7 +270,7 @@
         var zoomControl = L.control.zoom({
             position: 'topleft'
         }).addTo(map);
-        L.control.locate({locateOptions: {maxZoom: 19, enableHighAccuracy: !isLowEnd}}).addTo(map);
+        var locateControl = L.control.locate({locateOptions: {maxZoom: 19, enableHighAccuracy: !isLowEnd}}).addTo(map);
         var measureControl = new L.Control.Measure({
             position: 'topleft',
             primaryLengthUnit: 'meters',
@@ -336,7 +369,7 @@
             return {
                 pane: 'pane_Copyofcontrolswithdescriptionpraslin_1',
                 shape: 'triangle',
-                radius: 5.6,
+                radius: featureRadius,
                 opacity: 1,
                 color: 'rgba(255,255,255,1.0)',
                 dashArray: '',
@@ -381,13 +414,19 @@
         var selectedFeatureName = null;
         var userLatLng = null;
         var userAccuracy = null;
+        var navigationActive = false;
         var userDirectionLine = null;
         var userDirectionArrow = null;
         var userTargetInfoControl = L.control({ position: 'bottomleft' });
         userTargetInfoControl.onAdd = function() {
             var container = L.DomUtil.create('div', 'user-target-info hidden');
-            container.innerHTML = '<div class="user-target-text">Select a feature to see distance and bearing.</div>' +
-                '<a href="#" class="release-link">Clear</a>';
+            container.innerHTML = ''
+                + '<div class="user-target-text">Select a feature to see distance and bearing.</div>'
+                + '<div class="user-target-actions">'
+                + '<a href="#" class="user-target-btn nav-start">Navigate</a>'
+                + '<a href="#" class="user-target-btn stop nav-stop hidden">Stop</a>'
+                + '</div>'
+                + '<a href="#" class="release-link">Clear</a>';
             L.DomEvent.disableClickPropagation(container);
             return container;
         };
@@ -400,7 +439,47 @@
                     evt.preventDefault();
                     clearSelectedFeature();
                 }
+                if (target && target.classList && target.classList.contains('nav-start')) {
+                    evt.preventDefault();
+                    navigationActive = true;
+                    updateUserTarget();
+                }
+                if (target && target.classList && target.classList.contains('nav-stop')) {
+                    evt.preventDefault();
+                    navigationActive = false;
+                    updateUserTarget();
+                }
             });
+        }
+        var locationNoticeControl = L.control({ position: 'bottomleft' });
+        locationNoticeControl.onAdd = function() {
+            var container = L.DomUtil.create('div', 'location-notice hidden');
+            container.textContent = '';
+            L.DomEvent.disableClickPropagation(container);
+            return container;
+        };
+        locationNoticeControl.addTo(map);
+        var locationNoticeEl = locationNoticeControl.getContainer();
+
+        var nearbyTowns = [
+            { name: 'Baie Sainte Anne', lat: -4.3437, lng: 55.7592 },
+            { name: 'Grand Anse', lat: -4.3230, lng: 55.7360 },
+            { name: 'Anse Volbert', lat: -4.3199, lng: 55.7487 },
+            { name: 'La Passe', lat: -4.3585, lng: 55.8319 }
+        ];
+
+        function getNearestTown(latlng) {
+            var nearest = null;
+            var nearestDist = Infinity;
+            for (var i = 0; i < nearbyTowns.length; i++) {
+                var town = nearbyTowns[i];
+                var dist = map.distance(latlng, L.latLng(town.lat, town.lng));
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearest = town;
+                }
+            }
+            return nearest;
         }
 
         function getLayerLatLng(layer) {
@@ -455,11 +534,11 @@
                 return;
             }
             var distance = map.distance(userLatLng, selectedFeatureLatLng);
-            var bearingToUser = getBearing(selectedFeatureLatLng, userLatLng);
+            var bearingToFeature = getBearing(userLatLng, selectedFeatureLatLng);
             if (userTargetInfoEl) {
                 userTargetInfoEl.classList.remove('hidden');
                 var text = (selectedFeatureName ? selectedFeatureName + ': ' : '') +
-                    formatDistance(distance) + ' | ' + Math.round(bearingToUser) + ' deg';
+                    formatDistance(distance) + ' | ' + Math.round(bearingToFeature) + ' deg';
                 if (userAccuracy != null) {
                     text += ' | acc ±' + Math.round(userAccuracy) + ' m';
                 }
@@ -467,10 +546,27 @@
                 if (textEl) {
                     textEl.textContent = text;
                 }
+                var navStart = userTargetInfoEl.querySelector('.nav-start');
+                var navStop = userTargetInfoEl.querySelector('.nav-stop');
+                if (navStart && navStop) {
+                    navStart.classList.toggle('hidden', navigationActive);
+                    navStop.classList.toggle('hidden', !navigationActive);
+                }
             }
-            var arrowLatLng = getArrowLatLng(userLatLng, bearingToUser);
+            if (!navigationActive) {
+                if (userDirectionLine) {
+                    map.removeLayer(userDirectionLine);
+                    userDirectionLine = null;
+                }
+                if (userDirectionArrow) {
+                    map.removeLayer(userDirectionArrow);
+                    userDirectionArrow = null;
+                }
+                return;
+            }
+            var arrowLatLng = getArrowLatLng(userLatLng, bearingToFeature);
             if (!userDirectionLine) {
-                userDirectionLine = L.polyline([userLatLng, arrowLatLng], {
+                userDirectionLine = L.polyline([userLatLng, selectedFeatureLatLng], {
                     color: '#2563eb',
                     weight: 2,
                     opacity: 0.6,
@@ -478,17 +574,17 @@
                     interactive: false
                 }).addTo(map);
             } else {
-                userDirectionLine.setLatLngs([userLatLng, arrowLatLng]);
+                userDirectionLine.setLatLngs([userLatLng, selectedFeatureLatLng]);
             }
-            var arrowHtml = '<div class="gmaps-arrow" style="transform: rotate(' + bearingToUser + 'deg);">' +
+            var arrowHtml = '<div class="gmaps-arrow" style="transform: rotate(' + bearingToFeature + 'deg);">' +
                 '<div class="gmaps-arrow-tip"></div>' +
                 '<div class="gmaps-arrow-core"></div>' +
                 '</div>';
             var arrowIcon = L.divIcon({
                 className: 'user-direction-arrow-container',
                 html: arrowHtml,
-                iconSize: [16, 16],
-                iconAnchor: [8, 8]
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
             });
             if (!userDirectionArrow) {
                 userDirectionArrow = L.marker(arrowLatLng, {
@@ -512,6 +608,7 @@
             selectedFeatureLayer = null;
             selectedFeatureLatLng = null;
             selectedFeatureName = null;
+            navigationActive = false;
             updateUserTarget();
         }
         var i = 0;
@@ -567,13 +664,34 @@
             document.getElementsByClassName('search-button')[1].className += ' fas fa-search';
         }
         map.on('locationfound', function(e) {
-            userLatLng = e.latlng;
-            userAccuracy = typeof e.accuracy === 'number' ? e.accuracy : null;
-            updateUserTarget();
+            if (maxBounds.contains(e.latlng)) {
+                userLatLng = e.latlng;
+                userAccuracy = typeof e.accuracy === 'number' ? e.accuracy : null;
+                if (locationNoticeEl) {
+                    locationNoticeEl.classList.add('hidden');
+                }
+                updateUserTarget();
+            } else {
+                userLatLng = null;
+                userAccuracy = null;
+                if (locateControl && typeof locateControl.stop === 'function') {
+                    locateControl.stop();
+                }
+                var nearest = getNearestTown(e.latlng);
+                if (locationNoticeEl) {
+                    var place = nearest ? nearest.name : 'this location';
+                    locationNoticeEl.textContent = 'You are near ' + place + '. This map is limited to Praslin and La Digue.';
+                    locationNoticeEl.classList.remove('hidden');
+                }
+                updateUserTarget();
+            }
         });
         map.on('locationerror', function() {
             userLatLng = null;
             userAccuracy = null;
+            if (locationNoticeEl) {
+                locationNoticeEl.classList.add('hidden');
+            }
             updateUserTarget();
         });
         map.on('zoomend moveend', function() {
