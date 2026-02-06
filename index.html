@@ -90,10 +90,10 @@
             font-size: 11px;
             text-decoration: none;
             color: #ffffff;
-            background: #1a73e8;
+            background: #7bb7ff;
         }
         .user-target-btn.stop {
-            background: #dc2626;
+            background: #f28b82;
         }
         .user-target-btn.hidden {
             display: none;
@@ -729,8 +729,52 @@
             }
         });
 
-        var WGS_TO_LOCAL_EASTING = 62.367;
-        var WGS_TO_LOCAL_NORTHING = 271.892;
+        var UTM_ZONE_40_CENTRAL_MERIDIAN = 57 * Math.PI / 180;
+        var UTM_K0 = 0.9996;
+        var WGS84_A = 6378137.0;
+        var WGS84_F = 1 / 298.257223563;
+        var WGS84_E2 = WGS84_F * (2 - WGS84_F);
+        var WGS84_EP2 = WGS84_E2 / (1 - WGS84_E2);
+
+        function wgs84ToUtm40S(latDeg, lngDeg) {
+            var lat = latDeg * Math.PI / 180;
+            var lng = lngDeg * Math.PI / 180;
+            var sinLat = Math.sin(lat);
+            var cosLat = Math.cos(lat);
+            var tanLat = Math.tan(lat);
+
+            var N = WGS84_A / Math.sqrt(1 - WGS84_E2 * sinLat * sinLat);
+            var T = tanLat * tanLat;
+            var C = WGS84_EP2 * cosLat * cosLat;
+            var A = cosLat * (lng - UTM_ZONE_40_CENTRAL_MERIDIAN);
+
+            var e2 = WGS84_E2;
+            var e4 = e2 * e2;
+            var e6 = e4 * e2;
+            var M = WGS84_A * (
+                (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * lat
+                - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * lat)
+                + (15 * e4 / 256 + 45 * e6 / 1024) * Math.sin(4 * lat)
+                - (35 * e6 / 3072) * Math.sin(6 * lat)
+            );
+
+            var easting = UTM_K0 * N * (
+                A
+                + (1 - T + C) * Math.pow(A, 3) / 6
+                + (5 - 18 * T + T * T + 72 * C - 58 * WGS84_EP2) * Math.pow(A, 5) / 120
+            ) + 500000;
+
+            var northing = UTM_K0 * (
+                M + N * tanLat * (
+                    A * A / 2
+                    + (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24
+                    + (61 - 58 * T + T * T + 600 * C - 330 * WGS84_EP2) * Math.pow(A, 6) / 720
+                )
+            );
+
+            northing += 10000000;
+            return { easting: easting, northing: northing };
+        }
 
         function getClosedLatLngs(latlngs) {
             var ring = latlngs.slice();
@@ -751,10 +795,9 @@
             for (var i = 0; i < ring.length; i++) {
                 var wgsE = ring[i].lng;
                 var wgsN = ring[i].lat;
-                var localE = wgsE + WGS_TO_LOCAL_EASTING;
-                var localN = wgsN + WGS_TO_LOCAL_NORTHING;
+                var utm = wgs84ToUtm40S(wgsN, wgsE);
                 wgsPairs.push(wgsE.toFixed(6) + "," + wgsN.toFixed(6));
-                localPairs.push(localE.toFixed(6) + "," + localN.toFixed(6));
+                localPairs.push(utm.easting.toFixed(3) + "," + utm.northing.toFixed(3));
             }
             return {
                 wgs: wgsPairs.join(" ; "),
