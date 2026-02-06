@@ -68,17 +68,48 @@
         .user-target-info.hidden {
             display: none;
         }
+        .user-target-info .release-link {
+            display: inline-block;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .user-target-info .release-link:hover {
+            text-decoration: underline;
+        }
         .user-direction-arrow-container {
             background: transparent;
         }
-        .user-direction-arrow {
+        .gmaps-arrow {
+            position: relative;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #1a73e8;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+            transform-origin: 50% 50%;
+        }
+        .gmaps-arrow-tip {
+            position: absolute;
+            left: 50%;
+            top: -6px;
+            transform: translateX(-50%);
             width: 0;
             height: 0;
             border-left: 6px solid transparent;
             border-right: 6px solid transparent;
-            border-top: 12px solid rgba(37, 99, 235, 0.8);
-            transform-origin: 50% 50%;
-            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+            border-bottom: 8px solid #1a73e8;
+        }
+        .gmaps-arrow-core {
+            position: absolute;
+            left: 50%;
+            top: 4px;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #eaf2fe;
         }
         </style>
         <title></title>
@@ -349,17 +380,28 @@
         var selectedFeatureLatLng = null;
         var selectedFeatureName = null;
         var userLatLng = null;
+        var userAccuracy = null;
         var userDirectionLine = null;
         var userDirectionArrow = null;
         var userTargetInfoControl = L.control({ position: 'bottomleft' });
         userTargetInfoControl.onAdd = function() {
             var container = L.DomUtil.create('div', 'user-target-info hidden');
-            container.textContent = 'Select a feature to see distance and bearing.';
+            container.innerHTML = '<div class="user-target-text">Select a feature to see distance and bearing.</div>' +
+                '<a href="#" class="release-link">Clear</a>';
             L.DomEvent.disableClickPropagation(container);
             return container;
         };
         userTargetInfoControl.addTo(map);
         var userTargetInfoEl = userTargetInfoControl.getContainer();
+        if (userTargetInfoEl) {
+            userTargetInfoEl.addEventListener('click', function(evt) {
+                var target = evt.target;
+                if (target && target.classList && target.classList.contains('release-link')) {
+                    evt.preventDefault();
+                    clearSelectedFeature();
+                }
+            });
+        }
 
         function getLayerLatLng(layer) {
             if (!layer) return null;
@@ -413,13 +455,20 @@
                 return;
             }
             var distance = map.distance(userLatLng, selectedFeatureLatLng);
-            var bearing = getBearing(userLatLng, selectedFeatureLatLng);
+            var bearingToUser = getBearing(selectedFeatureLatLng, userLatLng);
             if (userTargetInfoEl) {
                 userTargetInfoEl.classList.remove('hidden');
-                userTargetInfoEl.textContent = (selectedFeatureName ? selectedFeatureName + ': ' : '') +
-                    formatDistance(distance) + ' | ' + Math.round(bearing) + ' deg';
+                var text = (selectedFeatureName ? selectedFeatureName + ': ' : '') +
+                    formatDistance(distance) + ' | ' + Math.round(bearingToUser) + ' deg';
+                if (userAccuracy != null) {
+                    text += ' | acc ±' + Math.round(userAccuracy) + ' m';
+                }
+                var textEl = userTargetInfoEl.querySelector('.user-target-text');
+                if (textEl) {
+                    textEl.textContent = text;
+                }
             }
-            var arrowLatLng = getArrowLatLng(userLatLng, bearing);
+            var arrowLatLng = getArrowLatLng(userLatLng, bearingToUser);
             if (!userDirectionLine) {
                 userDirectionLine = L.polyline([userLatLng, arrowLatLng], {
                     color: '#2563eb',
@@ -431,7 +480,10 @@
             } else {
                 userDirectionLine.setLatLngs([userLatLng, arrowLatLng]);
             }
-            var arrowHtml = '<div class="user-direction-arrow" style="transform: rotate(' + bearing + 'deg);"></div>';
+            var arrowHtml = '<div class="gmaps-arrow" style="transform: rotate(' + bearingToUser + 'deg);">' +
+                '<div class="gmaps-arrow-tip"></div>' +
+                '<div class="gmaps-arrow-core"></div>' +
+                '</div>';
             var arrowIcon = L.divIcon({
                 className: 'user-direction-arrow-container',
                 html: arrowHtml,
@@ -454,6 +506,12 @@
             selectedFeatureLayer = layer || null;
             selectedFeatureLatLng = getLayerLatLng(layer);
             selectedFeatureName = layer && layer.feature && layer.feature.properties ? layer.feature.properties['STATION'] : null;
+            updateUserTarget();
+        }
+        function clearSelectedFeature() {
+            selectedFeatureLayer = null;
+            selectedFeatureLatLng = null;
+            selectedFeatureName = null;
             updateUserTarget();
         }
         var i = 0;
@@ -510,10 +568,12 @@
         }
         map.on('locationfound', function(e) {
             userLatLng = e.latlng;
+            userAccuracy = typeof e.accuracy === 'number' ? e.accuracy : null;
             updateUserTarget();
         });
         map.on('locationerror', function() {
             userLatLng = null;
+            userAccuracy = null;
             updateUserTarget();
         });
         map.on('zoomend moveend', function() {
